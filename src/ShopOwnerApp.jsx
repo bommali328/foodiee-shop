@@ -7,17 +7,16 @@ import SockJS from 'sockjs-client';
 import logo from './assets/logo.png';
 
 // ✅ SECURE BASE URL UPDATE (AWS HTTPS)
-const API_BASE_URL = "https://foodiee-backend-env.eba-5d9p6wzb.eu-north-1.elasticbeanstalk.com";
+const API_BASE_URL = "https://Foodiee-backend-env.eba-5d9p6wzb.eu-north-1.elasticbeanstalk.com";
 
 export default function ShopOwnerApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem('shopLoggedIn') === 'true';
   });
-  const [currentView, setCurrentView] = useState('login'); 
+  const [currentView, setCurrentView] = useState('login'); // 'login', 'register', 'forgot'
   const [phone, setPhone] = useState('');
-  const [otpInput, setOtpInput] = useState('');
-  const [generatedOtpHint, setGeneratedOtpHint] = useState('');
-  const [step, setStep] = useState(1); 
+  const [passwordInput, setPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
   const [activeTab, setActiveTab] = useState('orders'); 
 
   const [isDarkMode, setIsDarkMode] = useState(true);
@@ -124,7 +123,7 @@ export default function ShopOwnerApp() {
     localStorage.removeItem('shopCategory');
     
     setIsLoggedIn(false);
-    setStep(1);
+    setCurrentView('login');
     toast('🔒 Logged out successfully');
   };
 
@@ -212,34 +211,6 @@ export default function ShopOwnerApp() {
       setUploadingImages(false);
     }
   };
-
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [shopCoordinates, setShopCoordinates] = useState({ lat: 18.5793, lng: 84.4452 }); 
-  const [locationStatus, setLocationStatus] = useState('4M4R+35 Ichchapuram, Andhra Pradesh, India (Default)');
-
-  const requestLocationPermission = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const latCoord = position.coords.latitude;
-          const lngCoord = position.coords.longitude;
-          setShopCoordinates({ lat: latCoord, lng: lngCoord });
-          setLat(latCoord.toFixed(4));
-          setLng(lngCoord.toFixed(4));
-          setLocationStatus(`Live Coordinates: Lat ${latCoord.toFixed(2)}, Lng ${lngCoord.toFixed(2)}`);
-          toast.success('📍 Live shop GPS coordinates captured!');
-        },
-        (error) => {
-          toast.error('❌ Location permission denied.');
-        },
-        { enableHighAccuracy: true }
-      );
-    } else {
-      toast.error('❌ Geolocation not supported');
-    }
-  };
-
-  const captureShopLocation = () => { requestLocationPermission(); };
 
   const [shopOrders, setShopOrders] = useState([]);
   const [menuItems, setMenuItems] = useState([]); 
@@ -413,55 +384,27 @@ export default function ShopOwnerApp() {
     return () => { stompClient.deactivate(); };
   }, [isLoggedIn, shopId]);
 
-  const handleSendOtp = async (e) => {
+  // --- PASSWORD LOGIN HANDLER (Backend Sync) ---
+  const handlePasswordLogin = async (e) => {
     e.preventDefault();
-    if (!phone || phone.length < 10 || !/^[6-9]\d{9}$/.test(phone)) {
-      toast.error('❌ Please enter a valid 10-digit mobile number');
+    if (!phone || phone.length < 10 || !passwordInput) {
+      toast.error('❌ Please enter mobile number and password');
       return;
     }
     const fullMobile = phone.startsWith('+91') ? phone : `+91${phone}`;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: fullMobile, role: 'shop' }),
+        body: JSON.stringify({ mobile: fullMobile, password: passwordInput, role: 'shop' }),
       });
       if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'NOT_REGISTERED' || data.error) {
-          toast.error('⚠️ Mobile not found! Please register first.');
-          setCurrentView('register');
-          return;
-        }
-        setGeneratedOtpHint(data.otp || '1234');
-        setStep(2);
-        toast.success(`📲 OTP sent successfully! (Hint: ${data.otp || '1234'})`);
-      } else {
-        toast.error('⚠️ Please register your shop first!');
-        setCurrentView('register');
-      }
-    } catch (error) {
-      setGeneratedOtpHint('1234');
-      setStep(2);
-      toast.success('📲 OTP generated successfully! (Hint: 1234)');
-    }
-  };
-
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    const fullMobile = phone.startsWith('+91') ? phone : `+91${phone}`;
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobile: fullMobile, otp: otpInput, role: 'shop' }),
-      });
-      if (response.ok) {
-        const data = await response.json();
+        const resData = await response.json();
+        const data = resData.data || resData;
         const currentShopId = data.id || data.shopId || 1;
         setShopId(currentShopId);
         
-        const currentShopName = data.shopName || shopProfile.shopName || 'My Shop';
+        const currentShopName = data.shopName || data.name || shopProfile.shopName;
         const currentMobile = data.mobile || fullMobile;
         const currentCategory = data.category || 'FOOD';
 
@@ -479,69 +422,76 @@ export default function ShopOwnerApp() {
         localStorage.setItem('shopCategory', currentCategory);
 
         setIsLoggedIn(true);
-        toast.success('🎉 Shop Login Successful!');
+        toast.success(`🎉 Welcome back, ${currentShopName}!`);
         fetchMenuItems(currentShopId);
         fetchPayments(currentShopId);
       } else {
-        if (otpInput === generatedOtpHint || otpInput === '1234') {
-          localStorage.setItem('shopLoggedIn', 'true');
-          localStorage.setItem('shopId', 1);
-          localStorage.setItem('shopMobile', fullMobile);
-          localStorage.setItem('shopCategory', 'FOOD');
-
-          setIsLoggedIn(true);
-          toast.success('🎉 Shop Login Successful!');
-          setMenuItems([]); 
-        } else {
-          toast.error('❌ Invalid OTP!');
-        }
+        const errData = await response.json();
+        toast.error(errData.error || '❌ Invalid mobile number or password! Please check or register.');
       }
     } catch (error) {
-      if (otpInput === generatedOtpHint || otpInput === '1234') {
-        localStorage.setItem('shopLoggedIn', 'true');
-        localStorage.setItem('shopId', 1);
-        localStorage.setItem('shopMobile', fullMobile);
-        localStorage.setItem('shopCategory', 'FOOD');
-
-        setIsLoggedIn(true);
-        toast.success('🎉 Shop Login Successful!');
-        setMenuItems([]);
-      } else {
-        toast.error('❌ Invalid OTP!');
-      }
+      toast.error('❌ Network error during login. Make sure backend is active.');
     }
   };
 
+  // --- FORGOT PASSWORD HANDLER (Backend Sync) ---
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    if (!phone || !newPasswordInput) {
+      toast.error('❌ Enter mobile number and new password');
+      return;
+    }
+    const fullMobile = phone.startsWith('+91') ? phone : `+91${phone}`;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: fullMobile, password: newPasswordInput, role: 'shop' }),
+      });
+      if (response.ok) {
+        toast.success('✓ Password updated successfully in database! Please login.');
+        setCurrentView('login');
+        setPasswordInput('');
+        setNewPasswordInput('');
+      } else {
+        const err = await response.json();
+        toast.error(err.error || 'Failed to reset password');
+      }
+    } catch (err) {
+      toast.error('❌ Server connection error');
+    }
+  };
+
+  // --- REGISTER HANDLER (Backend Sync) ---
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!regMobile || regMobile.length < 10 || !/^[6-9]\d{9}$/.test(regMobile)) {
-      toast.error('❌ Please enter a valid 10-digit mobile number');
+    if (!regMobile || regMobile.length < 10 || !regPassword) {
+      toast.error('❌ Please enter valid mobile number and password');
       return;
     }
     const fullMobile = regMobile.startsWith('+91') ? regMobile : `+91${regMobile}`;
     try {
-      const response = await fetch(`${API_BASE_URL}/api/shop/register?ownerId=${ownerId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          shopName: shopName,
+          fullName: shopName,
           mobile: fullMobile,
           password: regPassword,
-          address: address,
-          latitude: lat,
-          longitude: lng,
-          category: category
+          role: 'shop',
+          vehicleType: address,
+          bikeNumber: category
         }),
       });
       if (response.ok) {
         toast.success('🎉 Shop Registered Successfully! Please Login.');
         setCurrentView('login');
       } else {
-        toast.error('❌ Registration Failed');
+        const err = await response.json();
+        toast.error(err.error || '❌ Registration Failed');
       }
     } catch (error) {
-      toast.success('🎉 Shop Registered Successfully Locally!');
-      setCurrentView('login');
+      toast.error('❌ Network error during registration');
     }
   };
 
@@ -765,6 +715,7 @@ export default function ShopOwnerApp() {
     toast.success('📄 Tax Invoice PDF generated!');
   };
 
+  // --- AUTHENTICATION VIEWS (LOGIN, REGISTER, FORGOT) ---
   if (!isLoggedIn) {
     if (currentView === 'register') {
       return (
@@ -846,7 +797,18 @@ export default function ShopOwnerApp() {
                     <input type="text" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="Latitude" className={`w-1/2 ${isDarkMode ? 'bg-slate-950/80 border-slate-700 text-white' : 'bg-white/90 border-gray-300 text-gray-900'} border p-2.5 rounded-xl font-bold text-xs outline-none`} required />
                     <input type="text" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="Longitude" className={`w-1/2 ${isDarkMode ? 'bg-slate-950/80 border-slate-700 text-white' : 'bg-white/90 border-gray-300 text-gray-900'} border p-2.5 rounded-xl font-bold text-xs outline-none`} required />
                   </div>
-                  <button type="button" onClick={captureShopLocation} className="w-full bg-emerald-600/30 border border-emerald-500/50 text-emerald-400 py-2 rounded-xl font-bold text-[11px] cursor-pointer">Capture Live GPS Coordinates 📍</button>
+                  <button type="button" onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          setLat(pos.coords.latitude.toFixed(4));
+                          setLng(pos.coords.longitude.toFixed(4));
+                          toast.success('📍 GPS Captured!');
+                        },
+                        () => toast.error('❌ Location access denied')
+                      );
+                    }
+                  }} className="w-full bg-emerald-600/30 border border-emerald-500/50 text-emerald-400 py-2 rounded-xl font-bold text-[11px] cursor-pointer">Capture Live GPS Coordinates 📍</button>
                 </div>
                 
                 <button type="submit" className={`w-full ${regTheme.buttonGradient} py-3.5 rounded-2xl font-black shadow-xl cursor-pointer`}>Complete Registration 🚀</button>
@@ -858,6 +820,29 @@ export default function ShopOwnerApp() {
       );
     }
 
+    if (currentView === 'forgot') {
+      return (
+        <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-white font-sans p-4">
+          <Toaster />
+          <div className="w-full max-w-[420px] bg-slate-900 border-2 border-amber-500/40 rounded-[3rem] p-8 space-y-6 shadow-2xl">
+            <div className="text-center space-y-2">
+              <h2 className="text-2xl font-black text-amber-400">Reset Password</h2>
+              <p className="text-xs text-slate-400">Enter your mobile number and set a new password.</p>
+            </div>
+            <form onSubmit={handleForgotPassword} className="space-y-4 text-xs">
+              <input type="tel" maxLength="10" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Registered Mobile Number" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-2xl font-bold outline-none text-white" required />
+              <input type="password" value={newPasswordInput} onChange={(e) => setNewPasswordInput(e.target.value)} placeholder="New Password" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-2xl font-bold outline-none text-white" required />
+              <button type="submit" className="w-full bg-amber-500 text-slate-950 py-3.5 rounded-2xl font-black shadow-lg cursor-pointer">Update Password in DB 🛡️</button>
+              <div className="text-center pt-2">
+                <button type="button" onClick={() => setCurrentView('login')} className="text-slate-400 hover:text-white underline font-bold cursor-pointer">Back to Login</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    // --- MAIN LOGIN SCREEN (TOP: LOGIN, DOWNSIDE: FORGOT & REGISTER) ---
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-white font-sans p-0 sm:p-4 relative overflow-hidden">
         <div className="absolute top-10 right-10 w-72 h-72 bg-gradient-to-br from-amber-500/20 to-orange-500/5 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
@@ -874,7 +859,7 @@ export default function ShopOwnerApp() {
             </div>
             <div>
               <h2 className="text-3xl font-black tracking-tight bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-                foodiee<span className="text-amber-500">.</span>
+                Login
               </h2>
               <div className="inline-block bg-amber-500/15 border border-amber-500/30 px-3 py-0.5 rounded-full mt-1.5">
                 <p className="text-[10px] text-amber-500 font-extrabold uppercase tracking-widest">Ichapuram Merchant Portal</p>
@@ -882,52 +867,37 @@ export default function ShopOwnerApp() {
             </div>
           </div>
 
-          {step === 1 ? (
-            <form onSubmit={handleSendOtp} className="space-y-4 text-xs">
-              <div className="space-y-1.5">
-                <label className="block font-black uppercase tracking-widest text-[10px] pl-1 opacity-80">Partner Mobile Number</label>
-                <div className="flex items-center bg-slate-950/80 border border-slate-700/80 rounded-2xl shadow-inner overflow-hidden focus-within:border-amber-500 transition-all">
-                  <span className="bg-slate-800 text-amber-400 px-3.5 py-4 font-black text-xs border-r border-slate-700">+91</span>
-                  <input type="tel" maxLength="10" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} placeholder="10-digit mobile number" className="bg-transparent border-none outline-none w-full font-bold text-white placeholder:text-slate-500 text-xs px-3" required />
-                </div>
+          <form onSubmit={handlePasswordLogin} className="space-y-4 text-xs">
+            <div className="space-y-1.5">
+              <label className="block font-black uppercase tracking-widest text-[10px] pl-1 opacity-80">Partner Mobile Number</label>
+              <div className="flex items-center bg-slate-950/80 border border-slate-700/80 rounded-2xl shadow-inner overflow-hidden focus-within:border-amber-500 transition-all">
+                <span className="bg-slate-800 text-amber-400 px-3.5 py-4 font-black text-xs border-r border-slate-700">+91</span>
+                <input type="tel" maxLength="10" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} placeholder="10-digit mobile number" className="bg-transparent border-none outline-none w-full font-bold text-white placeholder:text-slate-500 text-xs px-3" required />
               </div>
+            </div>
 
-              <div className="flex justify-between items-center text-[11px] pt-1 px-1">
-                <span className="opacity-70 font-bold">New business?</span>
-                <button type="button" onClick={() => setCurrentView('register')} className="text-amber-500 font-black hover:underline cursor-pointer">Register New Shop 🏪</button>
+            <div className="space-y-1.5">
+              <label className="block font-black uppercase tracking-widest text-[10px] pl-1 opacity-80">Password</label>
+              <div className="flex items-center bg-slate-950/80 border border-slate-700/80 rounded-2xl shadow-inner overflow-hidden focus-within:border-amber-500 transition-all">
+                <span className="bg-slate-800 text-amber-400 px-3.5 py-4 font-black text-xs border-r border-slate-700"><Lock size={14}/></span>
+                <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} placeholder="Enter password" className="bg-transparent border-none outline-none w-full font-bold text-white placeholder:text-slate-500 text-xs px-3" required />
               </div>
+            </div>
 
-              <button type="submit" className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-400 text-slate-950 py-4 rounded-2xl font-black text-xs shadow-xl cursor-pointer mt-2">
-                Send Secure OTP 📲
+            <button type="submit" className="w-full bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-400 text-slate-950 py-4 rounded-2xl font-black text-xs shadow-xl cursor-pointer mt-2">
+              Login to Shop 🚀
+            </button>
+
+            {/* DOWNSIDE OPTIONS: Forgot Password & Register New Shop */}
+            <div className="flex justify-between items-center pt-3 text-[11px] font-bold px-1">
+              <button type="button" onClick={() => setCurrentView('forgot')} className="text-blue-400 underline cursor-pointer hover:text-blue-300">
+                Forgot Password?
               </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-4 text-xs animate-fadeIn">
-              <div className="text-center space-y-1.5 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
-                <p className="text-[11px] font-bold opacity-80">Verification code sent to</p>
-                <p className="text-sm font-black text-amber-500 flex items-center justify-center gap-2">
-                  <span>+91 {phone}</span>
-                  <span onClick={() => setStep(1)} className="text-[10px] text-blue-500 underline cursor-pointer">Change</span>
-                </p>
-                {generatedOtpHint && (
-                  <div className="inline-block bg-amber-500/20 border border-amber-500/50 px-3 py-1 rounded-xl mt-1.5">
-                    <p className="text-[10px] text-amber-500 font-bold">Testing OTP Hint: <span className="text-white font-black text-xs">{generatedOtpHint}</span></p>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="block font-black uppercase tracking-widest text-[10px] text-center opacity-80">Enter 4-Digit OTP</label>
-                <div className="flex items-center justify-center bg-slate-950/80 border border-slate-700/80 text-white px-4 py-3.5 rounded-2xl shadow-inner">
-                  <input type="text" maxLength="4" value={otpInput} onChange={(e) => setOtpInput(e.target.value)} placeholder="----" className="bg-transparent border-none outline-none w-full font-black text-white text-center tracking-[0.5em] text-xl" required autoFocus />
-                </div>
-              </div>
-
-              <button type="submit" className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-4 rounded-2xl font-black text-xs shadow-xl cursor-pointer mt-2">
-                Verify & Login ✅
+              <button type="button" onClick={() => setCurrentView('register')} className="text-emerald-400 underline cursor-pointer hover:text-emerald-300">
+                Register New Shop 🏪
               </button>
-            </form>
-          )}
+            </div>
+          </form>
 
           <div className="text-center pt-6">
             <p className="text-[9px] font-bold uppercase tracking-wider opacity-60">Secured by Foodiee Merchant Shield 🛡️</p>
@@ -938,6 +908,7 @@ export default function ShopOwnerApp() {
     );
   }
 
+  // --- LOGGED IN APP VIEW ---
   return (
     <div className={`flex h-screen w-full items-center justify-center ${isDarkMode ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-900'} font-sans p-0 sm:p-6 relative overflow-hidden transition-colors`}>
       <Toaster />
