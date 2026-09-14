@@ -4,9 +4,10 @@ import { jsPDF } from 'jspdf';
 import toast, { Toaster } from 'react-hot-toast';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
+import logo from './assets/logo.png';
 
-// ✅ BASE URL UPDATE (AWS)
-const API_BASE_URL = "http://Foodiee-backend-env.eba-5d9p6wzb.eu-north-1.elasticbeanstalk.com";
+// ✅ SECURE BASE URL UPDATE (AWS HTTPS)
+const API_BASE_URL = "https://foodiee-backend-env.eba-5d9p6wzb.eu-north-1.elasticbeanstalk.com";
 
 export default function ShopOwnerApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -50,10 +51,8 @@ export default function ShopOwnerApp() {
     isOpen: true,
   });
 
-  // --- ANALYTICS & PIE CHART FILTER STATE FOR PROFILE ---
   const [analyticsFilter, setAnalyticsFilter] = useState('monthly');
 
-  // --- DYNAMIC STYLISH THEME CONFIGURATION ---
   const getCategoryTheme = (cat, dark) => {
     switch (cat) {
       case 'GROCERY':
@@ -248,9 +247,8 @@ export default function ShopOwnerApp() {
   const [totalEarnings, setTotalEarnings] = useState(0.0);
   const [orderHistory, setOrderHistory] = useState([]);
 
-  // --- ORDER-ID BASED REAL-TIME CHAT STATES WITH UNREAD COUNT ---
   const [activeChatOrder, setActiveChatOrder] = useState(null);
-  const [chatType, setChatType] = useState('customer'); // 'customer' లేదా 'partner'
+  const [chatType, setChatType] = useState('customer'); 
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -258,18 +256,15 @@ export default function ShopOwnerApp() {
 
   const [editingItem, setEditingItem] = useState(null);
 
-  // --- WEBSOCKET LIVE CHAT SYNC (BASED ON ORDER ID) ---
   useEffect(() => {
     if (!activeChatOrder) return;
     const currentOrderId = activeChatOrder.orderId || activeChatOrder.id;
 
-    // 1. Fetch Chat History
     fetch(`${API_BASE_URL}/api/chat/history/${currentOrderId}`)
       .then(res => res.json())
       .then(data => setChatMessages(data))
       .catch(err => console.error("Error fetching chat history", err));
 
-    // 2. Connect WebSocket
     const socket = new SockJS(`${API_BASE_URL}/ws-foodiee`);
     const stompClient = new Client({
       webSocketFactory: () => socket,
@@ -303,7 +298,7 @@ export default function ShopOwnerApp() {
       senderMobile: shopProfile.mobileNumber,
       senderName: shopProfile.shopName,
       senderType: 'shop',
-      recipientRole: chatType, // 'customer' లేదా 'partner'
+      recipientRole: chatType, 
       message: chatInput
     };
 
@@ -365,7 +360,7 @@ export default function ShopOwnerApp() {
     } catch (error) {}
   };
 
- useEffect(() => {
+  useEffect(() => {
     if (!isLoggedIn || !shopId) return;
 
     fetchShopOrders();
@@ -375,7 +370,6 @@ export default function ShopOwnerApp() {
       webSocketFactory: () => socket,
       reconnectDelay: 5000, 
       onConnect: () => {
-        // 1. Shop-specific orders subscription
         stompClient.subscribe('/topic/shop/' + shopId, (message) => {
           const newOrder = JSON.parse(message.body);
           toast.success(`🔔 New Order Received: ${newOrder.orderId || `#ORD-${newOrder.id}`}`);
@@ -384,7 +378,6 @@ export default function ShopOwnerApp() {
           fetchShopOrders();
         });
 
-        // 2. Shop owner broadcast push notifications subscription
         stompClient.subscribe('/topic/broadcast/shops', (message) => {
           const broadcastData = JSON.parse(message.body);
           playSelectedRingtone();
@@ -400,7 +393,6 @@ export default function ShopOwnerApp() {
           ), { duration: 6000 });
         });
 
-        // 3. All users broadcast push notifications subscription
         stompClient.subscribe('/topic/broadcast/all', (message) => {
           const broadcastData = JSON.parse(message.body);
 
@@ -785,7 +777,7 @@ export default function ShopOwnerApp() {
             <div className="text-center my-auto space-y-4">
               <div className="w-20 h-20 mx-auto rounded-3xl p-1 bg-gradient-to-tr from-amber-500 to-orange-500 shadow-xl shadow-orange-500/30 flex items-center justify-center">
                 <div className="w-full h-full bg-slate-950 rounded-[22px] flex items-center justify-center overflow-hidden">
-                  <img src="/src/assets/logo.png" alt="Logo" className="w-full h-full object-cover" />
+                  <img src={logo} alt="Logo" className="w-full h-full object-cover" />
                 </div>
               </div>
               <div>
@@ -877,7 +869,7 @@ export default function ShopOwnerApp() {
           <div className="text-center mb-8 space-y-3">
             <div className="w-24 h-24 mx-auto rounded-[28px] p-1 bg-gradient-to-tr from-amber-500 via-orange-500 to-yellow-400 shadow-2xl shadow-orange-500/40 flex items-center justify-center">
               <div className="w-full h-full bg-slate-950 rounded-[24px] flex items-center justify-center overflow-hidden">
-                <img src="/src/assets/logo.png" alt="Logo" className="w-full h-full object-cover" />
+                <img src={logo} alt="Logo" className="w-full h-full object-cover" />
               </div>
             </div>
             <div>
@@ -1011,7 +1003,7 @@ export default function ShopOwnerApp() {
                     </div>
 
                     <div className="text-xs opacity-80">
-                   🛍️ {ord.items || ord.foodItems || ord.cartItems || ord.description || 'Standard Order Items'}
+                    🛍️ {ord.items || ord.foodItems || ord.cartItems || ord.description || 'Standard Order Items'}
                     </div>
                     
                     <div className="text-[10px] text-amber-500 font-bold flex items-center gap-1 pt-1">
@@ -1020,38 +1012,37 @@ export default function ShopOwnerApp() {
 
                     {ord.notes && <p className="text-amber-500 text-[11px]"><b>Note:</b> {ord.notes}</p>}
                     
-                    {/* --- CHAT BUTTONS FOR SHOP OWNER WITH UNREAD BADGE --- */}
-                      <div className="flex gap-2 pt-2 border-t opacity-90 mt-2">
-  <button 
-    onClick={() => { setActiveChatOrder(ord); setChatType('customer'); setUnreadChatCount(0); }} 
-    className="flex-1 bg-blue-500/20 text-blue-400 py-2 rounded-xl font-bold flex items-center justify-center gap-1 cursor-pointer relative"
-  >
-    <MessageSquare size={13} /> Chat with Customer
-    {unreadChatCount > 0 && chatType === 'customer' && (
-      <>
-        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md">
-          {unreadChatCount}
-        </span>
-        <span className="absolute top-0 right-0 w-3 h-3 bg-yellow-400 border-2 border-slate-900 rounded-full animate-ping"></span>
-      </>
-    )}
-  </button>
+                    <div className="flex gap-2 pt-2 border-t opacity-90 mt-2">
+                      <button 
+                        onClick={() => { setActiveChatOrder(ord); setChatType('customer'); setUnreadChatCount(0); }} 
+                        className="flex-1 bg-blue-500/20 text-blue-400 py-2 rounded-xl font-bold flex items-center justify-center gap-1 cursor-pointer relative"
+                      >
+                        <MessageSquare size={13} /> Chat with Customer
+                        {unreadChatCount > 0 && chatType === 'customer' && (
+                          <>
+                            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md">
+                              {unreadChatCount}
+                            </span>
+                            <span className="absolute top-0 right-0 w-3 h-3 bg-yellow-400 border-2 border-slate-900 rounded-full animate-ping"></span>
+                          </>
+                        )}
+                      </button>
 
-  <button 
-    onClick={() => { setActiveChatOrder(ord); setChatType('partner'); setUnreadChatCount(0); }} 
-    className="flex-1 bg-purple-500/20 text-purple-400 py-2 rounded-xl font-bold flex items-center justify-center gap-1 cursor-pointer relative"
-  >
-    <MessageSquare size={13} /> Chat with Delivery
-    {unreadChatCount > 0 && chatType === 'partner' && (
-      <>
-        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md">
-          {unreadChatCount}
-        </span>
-        <span className="absolute top-0 right-0 w-3 h-3 bg-yellow-400 border-2 border-slate-900 rounded-full animate-ping"></span>
-      </>
-    )}
-  </button>
-</div>
+                      <button 
+                        onClick={() => { setActiveChatOrder(ord); setChatType('partner'); setUnreadChatCount(0); }} 
+                        className="flex-1 bg-purple-500/20 text-purple-400 py-2 rounded-xl font-bold flex items-center justify-center gap-1 cursor-pointer relative"
+                      >
+                        <MessageSquare size={13} /> Chat with Delivery
+                        {unreadChatCount > 0 && chatType === 'partner' && (
+                          <>
+                            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-md">
+                              {unreadChatCount}
+                            </span>
+                            <span className="absolute top-0 right-0 w-3 h-3 bg-yellow-400 border-2 border-slate-900 rounded-full animate-ping"></span>
+                          </>
+                        )}
+                      </button>
+                    </div>
 
                     <div className="flex gap-2 pt-1">
                       <button onClick={() => updateOrderStatus(ord.id, 'Food Preparing')} className={`flex-1 ${currentTheme.buttonGradient} py-2 rounded-xl font-bold cursor-pointer shadow`}>Accept & Prepare 🍲</button>
@@ -1078,10 +1069,9 @@ export default function ShopOwnerApp() {
                         <span className="text-xs opacity-60 font-normal ml-2">({hist.customerMobile})</span>
                       </div>
 
-                        {/* Order History దగ్గర */}
-                        <div className="text-xs opacity-80">
-                         🛍️ {hist.items || hist.foodItems || hist.cartItems || hist.description || 'Standard Order Items'}
-                        </div>
+                      <div className="text-xs opacity-80">
+                       🛍️ {hist.items || hist.foodItems || hist.cartItems || hist.description || 'Standard Order Items'}
+                      </div>
                       
                       <div className="text-[10px] opacity-60 flex items-center gap-1">
                         <Clock size={11} /> Completed / Logged: {hist.orderDate || hist.timestamp || new Date().toLocaleString()}
@@ -1327,7 +1317,7 @@ export default function ShopOwnerApp() {
                 <p className="text-[10px] opacity-70 font-bold uppercase">Today's Net Earnings (Auto-Updated)</p>
                 <h4 className="text-xl font-black text-emerald-500">₹ {totalEarnings.toFixed(2)}</h4>
                 <p className="text-[10px] opacity-50">Amount calculated from active/completed orders.</p>
-                <button onClick={() => generateEarningsPDF('Today_Earnings', `₹ ${totalEarnings.toFixed(2)}`)} className={`w-full ${currentTheme.buttonGradient} py-2.5 rounded-xl font-bold shadow flex items-center justify-center gap-1 mt-2 cursor-pointer`}>
+                <button onClick={() => generateProfessionalAnalyticsPDF('daily')} className={`w-full ${currentTheme.buttonGradient} py-2.5 rounded-xl font-bold shadow flex items-center justify-center gap-1 mt-2 cursor-pointer`}>
                   <Download size={13} /> Download Statement PDF
                 </button>
               </div>
@@ -1357,7 +1347,6 @@ export default function ShopOwnerApp() {
           {activeTab === 'profile' && (
             <div className="space-y-4 text-xs">
               
-              {/* --- EXCLUSIVE PROFILE TOP: PIE CHART & ANALYTICS WITH FILTERS & PDF --- */}
               <div className={`${isDarkMode ? 'bg-slate-900/90 border-slate-800 text-white' : 'bg-white/90 border-gray-200 text-gray-900'} p-4 rounded-3xl border shadow-sm space-y-3`}>
                 <div className="flex justify-between items-center border-b pb-2 opacity-90">
                   <div className="flex items-center gap-2">
@@ -1367,7 +1356,6 @@ export default function ShopOwnerApp() {
                   <span className={`text-[10px] ${currentTheme.badgeBg} px-2 py-0.5 rounded-md font-bold uppercase`}>{shopProfile.category}</span>
                 </div>
 
-                {/* Filter Buttons for Pie/Stats */}
                 <div className="grid grid-cols-4 gap-1 bg-slate-800/40 p-1 rounded-xl">
                   {['daily', 'weekly', 'monthly', 'yearly'].map((tab) => (
                     <button
@@ -1384,7 +1372,6 @@ export default function ShopOwnerApp() {
                   ))}
                 </div>
 
-                {/* Analytics & Earnings Summary */}
                 <div className="pt-2 space-y-3">
                   <div className="flex justify-between items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-800/60">
                     <div>
@@ -1401,7 +1388,6 @@ export default function ShopOwnerApp() {
                     </div>
                   </div>
 
-                  {/* Circular Pie Chart Visual Representation */}
                   <div className="flex items-center justify-around py-3 bg-slate-950/20 rounded-2xl border border-slate-800/40">
                     <div className="relative w-20 h-20 rounded-full flex items-center justify-center bg-gradient-to-tr from-amber-500 via-emerald-500 to-rose-500 p-1 shadow-lg">
                       <div className="w-full h-full bg-slate-950 rounded-full flex flex-col items-center justify-center text-center">
@@ -1425,7 +1411,6 @@ export default function ShopOwnerApp() {
                     </div>
                   </div>
 
-                  {/* Professional PDF Download Button */}
                   <button 
                     onClick={() => generateProfessionalAnalyticsPDF(analyticsFilter)}
                     className={`w-full ${currentTheme.buttonGradient} py-2.5 rounded-xl font-black text-xs shadow-lg flex items-center justify-center gap-2 cursor-pointer`}
@@ -1481,7 +1466,7 @@ export default function ShopOwnerApp() {
 
                   <label className="text-[10px] opacity-70 font-bold">FSSAI License</label>
                   <input type="text" value={shopProfile.fssaiLicense} onChange={(e) => setShopProfile({...shopProfile, fssaiLicense: e.target.value})} className={`w-full ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-gray-200 text-gray-900'} border p-2 rounded-xl font-bold outline-none`} required />
-                    
+                  
                   <button type="submit" className={`w-full ${currentTheme.buttonGradient} py-2.5 rounded-xl font-black shadow mt-2 cursor-pointer`}>Save Profile</button>
                 </form>
               ) : (
@@ -1613,7 +1598,6 @@ export default function ShopOwnerApp() {
         </div>
       )}
 
-      {/* --- ORDER-ID BASED REAL-TIME CHAT MODAL FOR SHOP WITH UNREAD COUNT --- */}
       {activeChatOrder && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className={`${isDarkMode ? 'bg-slate-900 text-white border-slate-800' : 'bg-white text-gray-900 border-gray-200'} w-full max-w-sm rounded-3xl p-5 border flex flex-col h-[480px]`}>
