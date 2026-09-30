@@ -9,6 +9,8 @@ import logo from './assets/logo.png';
 // ✅ SECURE BASE URL UPDATE (AWS / Localhost)
 const API_BASE_URL = "https://Foodiee-backend-env.eba-5d9p6wzb.eu-north-1.elasticbeanstalk.com";
 
+
+
 export default function ShopOwnerApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
     return localStorage.getItem('shopLoggedIn') === 'true';
