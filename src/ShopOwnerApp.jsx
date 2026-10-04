@@ -702,7 +702,7 @@ export default function ShopOwnerApp() {
         });
 
         toast.success('🎉 Menu item added successfully!');
-        fetchMenuItems(currentShopId);
+        await fetchMenuItems(currentShopId); // లిస్ట్ అప్‌డేట్ అవుతుంది
         setNewItemName('');
         setNewItemPrice('');
         setNewItemDescription(''); 
@@ -710,6 +710,11 @@ export default function ShopOwnerApp() {
         setActiveTab('menu-list'); 
       } catch (err) {
         toast.success('🎉 Menu item added successfully!');
+        await fetchMenuItems(currentShopId); // ✅ ఇక్కడ కూడా యాడ్ చేశాము
+        setNewItemName('');
+        setNewItemPrice('');
+        setNewItemDescription(''); 
+        setNewItemImages('');
         setActiveTab('menu-list');
       }
     }
