@@ -38,6 +38,10 @@ export default function ShopOwnerApp() {
   const [address, setAddress] = useState('4M4R+35 Ichchapuram, Andhra Pradesh, India');
   const [category, setCategory] = useState('FOOD'); 
 
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [enteredPin, setEnteredPin] = useState('');
+  const [shopForgotMode, setShopForgotMode] = useState('request'); // 'request' or 'verify'
+
   // Shop Profile State
   const [shopProfile, setShopProfile] = useState({
     shopName: localStorage.getItem('shopName') || 'Sri Balaji Tiffins & Meals',
@@ -49,6 +53,7 @@ export default function ShopOwnerApp() {
     fssaiLicense: 'FSSAI-22489012345678',
     isOpen: true,
   });
+
 
   const [analyticsFilter, setAnalyticsFilter] = useState('monthly');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -101,6 +106,15 @@ export default function ShopOwnerApp() {
   const [mainFile, setMainFile] = useState(null);
   const [galleryFiles, setGalleryFiles] = useState([]);
   const [uploadingImages, setUploadingImages] = useState(false);
+
+  const showShopNativeNotification = (title, bodyText) => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, {
+        body: bodyText,
+        icon: logo
+      });
+    }
+  };
 
   useEffect(() => {
     const savedLogin = localStorage.getItem('shopLoggedIn');
@@ -427,6 +441,8 @@ export default function ShopOwnerApp() {
       onConnect: () => {
         stompClient.subscribe('/topic/shop/' + shopId, (message) => {
           const newOrder = JSON.parse(message.body);
+          // ✅ WhatsApp లాగా లాక్ స్క్రీన్ పై పాప్-అప్ రావడానికి
+          showShopNativeNotification("🔔 New Order Received!", `Order ID: ${newOrder.orderId || `#ORD-${newOrder.id}`}`);
           toast.success(`🔔 New Order Received: ${newOrder.orderId || `#ORD-${newOrder.id}`}`);
           setIncomingPopupOrder(newOrder);
           fetchShopOrders();
@@ -588,7 +604,7 @@ export default function ShopOwnerApp() {
     }
   };
 
-  const toggleStoreStatus = async () => {
+ const toggleStoreStatus = async () => {
     const newStatus = !shopProfile.isOpen;
     setShopProfile({
       ...shopProfile,
@@ -600,11 +616,15 @@ export default function ShopOwnerApp() {
       await fetch(`${API_BASE_URL}/api/shop/status/${shopId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isOpen: newStatus, status: newStatus ? 'Open & Accepting Orders' : 'Store Temporarily Closed' })
+        body: JSON.stringify({ 
+          isOpen: newStatus, 
+          status: newStatus ? 'Open & Accepting Orders' : 'Store Temporarily Closed' 
+        })
       });
-    } catch (e) {}
-
-    toast.success(newStatus ? '🟢 Store is now ONLINE! Synced with Customer & Admin apps.' : '🔴 Store is now OFFLINE! Hidden from Customer app.');
+      toast.success(newStatus ? '🟢 Store is now ONLINE!' : '🔴 Store is now OFFLINE!');
+    } catch (e) {
+      toast.error('❌ Failed to update store status on server');
+    }
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
@@ -960,28 +980,146 @@ export default function ShopOwnerApp() {
       );
     }
 
-    if (currentView === 'forgot') {
+   if (currentView === 'forgot') {
       return (
         <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-white font-sans p-4">
           <Toaster />
-          <div className="w-full max-w-[420px] bg-slate-900 border-2 border-amber-500/40 rounded-[3rem] p-8 space-y-6 shadow-2xl">
-            <div className="text-center space-y-2">
-              <h2 className="text-2xl font-black text-amber-400">Reset Password</h2>
-              <p className="text-xs text-slate-400">Enter your mobile number and set a new password.</p>
+          <div className="w-full max-w-[420px] bg-slate-900 border-2 border-amber-500/40 rounded-[3rem] p-8 space-y-4 shadow-2xl">
+            <div className="text-center space-y-1 mb-2">
+              <h2 className="text-2xl font-black text-amber-400">Merchant Reset Password</h2>
+              <p className="text-xs text-slate-400">Follow the steps below to reset your password.</p>
             </div>
-            <form onSubmit={handleForgotPassword} className="space-y-4 text-xs">
-              <input type="tel" maxLength="10" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Registered Mobile Number" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-2xl font-bold outline-none text-white" required />
-              <input type="password" value={newPasswordInput} onChange={(e) => setNewPasswordInput(e.target.value)} placeholder="New Password" className="w-full bg-slate-950 border border-slate-800 p-3.5 rounded-2xl font-bold outline-none text-white" required />
-              <button type="submit" className="w-full bg-amber-500 text-slate-950 py-3.5 rounded-2xl font-black shadow-lg cursor-pointer">Update Password in DB 🛡️</button>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              const fullMobile = phone.startsWith('+91') ? phone : `+91${phone}`;
+              
+              if (!fullMobile || fullMobile.length < 10 || !enteredPin || !newPasswordInput) {
+                toast.error('❌ Please fill all fields including the 4-digit PIN!');
+                return;
+              }
+
+              try {
+                const res = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    mobile: fullMobile, 
+                    otp: enteredPin, // 4-digit PIN
+                    newPassword: newPasswordInput, 
+                    role: 'shop' 
+                  }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  toast.success('✓ Password updated successfully in database!');
+                  setCurrentView('login');
+                  setPhone('');
+                  setEnteredPin('');
+                  setNewPasswordInput('');
+                } else {
+                  toast.error(data.error || 'Failed to reset password');
+                }
+              } catch (err) {
+                toast.error('❌ Network error during password reset');
+              }
+            }} className="space-y-3.5 text-xs">
+              
+              {/* Box 1: Registered Mobile Number */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-amber-400 uppercase tracking-widest pl-1">1. Registered Mobile Number</label>
+                <input 
+                  type="tel" 
+                  maxLength="10" 
+                  value={phone} 
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} 
+                  placeholder="10-digit mobile number" 
+                  className="w-full bg-slate-950 border border-slate-800 p-3 rounded-2xl font-bold outline-none text-white" 
+                  required 
+                />
+              </div>
+
+              {/* Box 2: Send OTP / WhatsApp PIN Button */}
+              <div>
+                <button 
+                  type="button" 
+                  onClick={async () => {
+                    const fullMobile = phone.startsWith('+91') ? phone : `+91${phone}`;
+                    if (!fullMobile || fullMobile.length < 10) {
+                      toast.error('❌ Please enter a valid 10-digit mobile number first');
+                      return;
+                    }
+                    try {
+                      const res = await fetch(`${API_BASE_URL}/api/auth/forgot-password`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mobile: fullMobile, role: 'shop' }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        toast.success('✓ 4-digit PIN generated for WhatsApp!');
+                        if (data.whatsappRedirectUrl) {
+                          window.open(data.whatsappRedirectUrl, '_blank');
+                        }
+                      } else {
+                        toast.error(data.error || 'Mobile number not found');
+                      }
+                    } catch (err) {
+                      toast.error('❌ Network error while requesting PIN');
+                    }
+                  }}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 py-2.5 rounded-xl font-black text-xs shadow cursor-pointer transition"
+                >
+                  2. Send OTP / Get WhatsApp PIN 💬
+                </button>
+              </div>
+
+              {/* Box 3: Enter 4-Digit PIN */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-amber-400 uppercase tracking-widest pl-1">3. Enter 4-Digit PIN</label>
+                <input 
+                  type="text" 
+                  maxLength="4" 
+                  value={enteredPin} 
+                  onChange={(e) => setEnteredPin(e.target.value.replace(/\D/g, ''))} 
+                  placeholder="1234" 
+                  className="w-full bg-slate-950 border border-slate-800 p-3 rounded-2xl text-center text-base font-black text-amber-400 tracking-[0.4em] outline-none" 
+                  required 
+                />
+              </div>
+
+              {/* Box 4: New Password */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-black text-amber-400 uppercase tracking-widest pl-1">4. New Password</label>
+                <input 
+                  type="password" 
+                  value={newPasswordInput} 
+                  onChange={(e) => setNewPasswordInput(e.target.value)} 
+                  placeholder="Enter new password" 
+                  className="w-full bg-slate-950 border border-slate-800 p-3 rounded-2xl font-bold outline-none text-white" 
+                  required 
+                />
+              </div>
+
+              {/* Box 5: Submit / Update Password Button */}
+              <button 
+                type="submit" 
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 py-3.5 rounded-2xl font-black shadow-lg cursor-pointer mt-1"
+              >
+                5. Submit & Update Password 🔒
+              </button>
+
               <div className="text-center pt-2">
-                <button type="button" onClick={() => setCurrentView('login')} className="text-slate-400 hover:text-white underline font-bold cursor-pointer">Back to Login</button>
+                <button type="button" onClick={() => setCurrentView('login')} className="text-slate-400 hover:text-white underline font-bold cursor-pointer">
+                  Back to Login
+                </button>
               </div>
             </form>
           </div>
         </div>
       );
     }
-
+            
     return (
       <div className="flex h-screen w-full items-center justify-center bg-slate-950 text-white font-sans p-0 sm:p-4 relative overflow-hidden">
         <div className="absolute top-10 right-10 w-72 h-72 bg-gradient-to-br from-amber-500/20 to-orange-500/5 rounded-full blur-3xl pointer-events-none animate-pulse"></div>
