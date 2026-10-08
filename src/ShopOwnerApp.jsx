@@ -243,6 +243,23 @@ export default function ShopOwnerApp() {
     { id: 'digital_chime', name: '⚡ Digital Chime (Zomato Style)', url: 'https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3' }
   ];
 
+  // ✅ ఇక్కడ `playShopRingtone` ఫంక్షన్‌ని యాడ్ చేయండి
+  const playShopRingtone = (ringUrl) => {
+    try {
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      
+      const audio = new Audio(ringUrl);
+      audio.play().catch(e => {
+        console.warn("Audio play blocked or failed", e);
+      });
+    } catch (err) {
+      console.warn("Audio Context error", err);
+    }
+  };
+
   const handleSaveBankDetails = async (e) => {
     e.preventDefault();
     try {
@@ -1757,8 +1774,7 @@ export default function ShopOwnerApp() {
                       key={ring.id}
                       onClick={() => {
                         setSelectedRinger(ring.id);
-                        const preview = new Audio(ring.url);
-                        preview.play().catch(e => {});
+                        playShopRingtone(ring.url); // ✅ ఇక్కడ కొత్త ఫంక్షన్‌ని వాడాలి
                         toast.success(`Selected: ${ring.name}`);
                       }}
                       className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition ${
