@@ -426,12 +426,13 @@ export default function ShopOwnerApp() {
     } catch (error) {}
   };
 
+ 
   const fetchShopOrders = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/orders/shop/${shopId}`);
       if (response.ok) {
         const data = await response.json();
-        const sortedData = data.sort((a, b) => b.id - a.id);
+        const sortedData = Array.isArray(data) ? data.sort((a, b) => b.id - a.id) : [];
 
         const pendingOrders = sortedData.filter(o => o.status === 'Pending Approval');
         setShopOrders(pendingOrders);
@@ -443,33 +444,65 @@ export default function ShopOwnerApp() {
         const calculatedTotal = completedOrders.reduce((sum, item) => sum + (Number(item.totalAmount) || Number(item.amount) || 0), 0);
         setTotalEarnings(calculatedTotal);
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error("Error fetching shop orders", error);
+    }
   };
 
   useEffect(() => {
     if (!isLoggedIn || !shopId) return;
 
+    // 1. ఇనిషియల్ ఆర్డర్స్ ఫెచ్ చేయడం
     fetchShopOrders();
 
+    // 2. ✅ బ్యాక్‌గ్రౌండ్ ఆటో-పోలింగ్ (ప్రతి 4 సెకన్లకు ఒకసారి ఆర్డర్‌లను ఆటోమేటిక్‌గా సింక్ చేస్తుంది)
+    const pollingInterval = setInterval(() => {
+      fetchShopOrders();
+    }, 4000);
+
+    // 3. WebSocket రియల్-టైమ్ కనెక్షన్
     const socket = new SockJS(`${API_BASE_URL}/ws-foodiee`);
     const stompClient = new Client({
       webSocketFactory: () => socket,
-      reconnectDelay: 5000, 
+      reconnectDelay: 3000, 
       onConnect: () => {
+        // రెండు డిఫరెంట్ టాపిక్స్ సబ్‌స్క్రైబ్ చేయడం ద్వారా నోటిఫికేషన్ మిస్ అవ్వకుండా ఉంటుంది
         stompClient.subscribe('/topic/shop/' + shopId, (message) => {
-          const newOrder = JSON.parse(message.body);
-          // ✅ WhatsApp లాగా లాక్ స్క్రీన్ పై పాప్-అప్ రావడానికి
-          showShopNativeNotification("🔔 New Order Received!", `Order ID: ${newOrder.orderId || `#ORD-${newOrder.id}`}`);
-          toast.success(`🔔 New Order Received: ${newOrder.orderId || `#ORD-${newOrder.id}`}`);
-          setIncomingPopupOrder(newOrder);
-          fetchShopOrders();
+          handleIncomingOrder(message);
+        });
+
+        stompClient.subscribe('/topic/shop/orders/' + shopId, (message) => {
+          handleIncomingOrder(message);
         });
       },
     });
 
+    const handleIncomingOrder = (message) => {
+      try {
+        const newOrder = JSON.parse(message.body);
+        
+        // ✅ కొత్త ఆర్డర్ రాగానే ఇన్‌స్టెంట్‌గా సౌండ్ మోగడానికి
+        const activeRingerUrl = ringtones.find(r => r.id === selectedRinger)?.url || ringtones[0].url;
+        playShopRingtone(activeRingerUrl);
+
+        // ✅ నేటివ్ పాప్-అప్ నోటిఫికేషన్
+        showShopNativeNotification("🔔 New Order Received!", `Order ID: ${newOrder.orderId || `#ORD-${newOrder.id}`}`);
+        toast.success(`🔔 New Order Received: ${newOrder.orderId || `#ORD-${newOrder.id}`}`);
+        
+        setIncomingPopupOrder(newOrder);
+        fetchShopOrders();
+      } catch (e) {
+        console.error("Error parsing incoming order", e);
+      }
+    };
+
     stompClient.activate();
-    return () => { stompClient.deactivate(); };
-  }, [isLoggedIn, shopId]);
+    
+    return () => { 
+      clearInterval(pollingInterval); 
+      stompClient.deactivate(); 
+    };
+  }, [isLoggedIn, shopId, selectedRinger]);
 
   const handlePasswordLogin = async (e) => {
     e.preventDefault();
