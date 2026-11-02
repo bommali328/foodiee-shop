@@ -5,6 +5,8 @@ import toast, { Toaster } from 'react-hot-toast';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import logo from './assets/logo.png';
+import { PushNotifications } from '@capacitor/push-notifications';
+import { Capacitor } from '@capacitor/core';
 
 // ✅ SECURE BASE URL UPDATE (AWS / Localhost)
 const API_BASE_URL = import.meta.env.VITE_API_URL || "https://api.foodiee.shop";
@@ -136,6 +138,46 @@ export default function ShopOwnerApp() {
       fetchPayments(savedId || 1);
     }
   }, []);
+
+  // ✅ Native Push Notifications Registration for Shop Owner
+  useEffect(() => {
+    const registerShopPush = async () => {
+      try {
+        if (typeof Capacitor === 'undefined' || !Capacitor.isNativePlatform()) {
+          console.log("Running on Web Browser. PushNotifications plugin skipped.");
+          return;
+        }
+
+        let permResult = await PushNotifications.checkPermissions();
+        if (permResult.receive === 'prompt') {
+          permResult = await PushNotifications.requestPermissions();
+        }
+        
+        if (permResult.receive === 'granted') {
+          await PushNotifications.register();
+          
+          PushNotifications.addListener('registration', async (token) => {
+            console.log('Shop Native Push Registration Token:', token.value);
+            const shopMob = localStorage.getItem('shopMobile');
+            if (shopMob && token.value) {
+              await fetch(`${API_BASE_URL}/api/shop/update-fcm-token`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mobile: shopMob, fcmToken: token.value })
+              });
+              console.log("Shop FCM Token successfully synced to database!");
+            }
+          });
+        }
+      } catch (error) {
+        console.log("Push notifications not supported in this environment:", error);
+      }
+    };
+
+    if (isLoggedIn) {
+      registerShopPush();
+    }
+  }, [isLoggedIn]);
 
  // --- ADMIN CHAT WEBSOCKET LISTENER FOR SHOP ---
   useEffect(() => {
@@ -654,28 +696,24 @@ export default function ShopOwnerApp() {
     }
   };
 
- const toggleStoreStatus = async () => {
+const toggleStoreStatus = async () => {
     const newStatus = !shopProfile.isOpen;
-    setShopProfile({
-      ...shopProfile,
+    setShopProfile(prev => ({
+      ...prev,
       isOpen: newStatus,
       status: newStatus ? 'Open & Accepting Orders' : 'Store Temporarily Closed',
-    });
+    }));
 
     try {
-      await fetch(`${API_BASE_URL}/api/shop/status/${shopId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          isOpen: newStatus, 
-          status: newStatus ? 'Open & Accepting Orders' : 'Store Temporarily Closed' 
-        })
+      await fetch(`${API_BASE_URL}/api/shop/status/toggle/${shopId}?shopOpen=${newStatus}`, {
+        method: 'PUT'
       });
-      toast.success(newStatus ? '🟢 Store is now ONLINE!' : '🔴 Store is now OFFLINE!');
+      toast.success(newStatus ? '🟢 Store is now ONLINE!' : '🔴 Store is now OFFLINE (Closed)!');
     } catch (e) {
       toast.error('❌ Failed to update store status on server');
     }
   };
+  
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -819,9 +857,10 @@ export default function ShopOwnerApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ available: nextStatus, status: nextStatus ? 'ON' : 'OFF' })
       });
-    } catch (e) {}
-
-    toast.success(nextStatus ? '🟢 Item turned ON (Visible to Customer App)' : '🔴 Item turned OFF (Hidden from Customer App)');
+      toast.success(nextStatus ? '🟢 Item turned ON' : '🔴 Item turned OFF (Out of Stock)');
+    } catch (e) {
+      toast.error('❌ Failed to update item status');
+    }
   };
 
   const generateProfessionalAnalyticsPDF = (filterType) => {
@@ -855,6 +894,56 @@ export default function ShopOwnerApp() {
   const avgOrderValue = completedOrdersCount > 0 ? (totalEarnings / completedOrdersCount).toFixed(2) : '0.00';
   const repeatCustomersCount = 12;
 
+  const now = new Date();
+
+    const getSelectedAnalyticsData = () => {
+    if (!Array.isArray(orderHistory) || orderHistory.length === 0) {
+      return { revenue: '0.00', count: 0 };
+    }
+
+    const filtered = orderHistory.filter(o => {
+      // స్టేటస్ చెకింగ్ (Uppercase లోకి మార్చి అన్ని కంప్లీటెడ్ స్టేటస్‌లను అనుమతించడం)
+      const status = (o.status || '').toUpperCase();
+      const isCompleted = status.includes('DELIVERED') || status.includes('COMPLETED') || status.includes('READY') || status.includes('PREPARING') || status.includes('PICKED');
+      if (!isCompleted) return false;
+
+      // డేట్ ఎక్స్‌ట్రాక్ట్ చేయడం (ఒకవేళ డేట్ లేకపోతే ప్రస్తుత తేదీని తీసుకోవడం)
+      const rawDate = o.orderDate || o.timestamp || o.date || o.createdAt;
+      const orderDate = rawDate ? new Date(rawDate) : new Date();
+
+      // డేట్ ఇన్వాలిడ్ అయితే ఫిల్టర్ నుండి తొలగించకుండా ఉండటానికి
+      if (isNaN(orderDate.getTime())) return true;
+
+      if (analyticsFilter === 'daily') {
+        // కేవలం ఈ రోజు (Today) జరిగినవి
+        return orderDate.toDateString() === now.toDateString();
+      } 
+      else if (analyticsFilter === 'weekly') {
+        // గత 7 రోజులలో జరిగినవి
+        const diffTime = now - orderDate;
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        return diffDays >= 0 && diffDays <= 7;
+      } 
+      else if (analyticsFilter === 'monthly') {
+        // ఈ నెలలో (Current Month & Year) జరిగినవి
+        return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+      } 
+      else if (analyticsFilter === 'yearly') {
+        // ఈ సంవత్సరంలో (Current Year) జరిగినవి
+        return orderDate.getFullYear() === now.getFullYear();
+      }
+      return true;
+    });
+
+    const revenue = filtered.reduce((sum, item) => sum + (Number(item.totalAmount) || Number(item.amount) || 0), 0);
+    return {
+      revenue: revenue.toFixed(2),
+      count: filtered.length
+    };
+  };
+
+  const currentAnalytics = getSelectedAnalyticsData();
+  
   const generateGstTaxInvoice = () => {
     const doc = new jsPDF();
     doc.setFillColor(15, 23, 42);
@@ -1702,18 +1791,18 @@ export default function ShopOwnerApp() {
                   ))}
                 </div>
 
-                <div className="pt-2 space-y-3">
+             <div className="pt-2 space-y-3">
                   <div className="flex justify-between items-center bg-slate-950/40 p-3 rounded-2xl border border-slate-800/60">
                     <div>
                       <p className="text-[9px] opacity-60 uppercase font-bold">Selected Period Revenue</p>
                       <p className={`text-base font-black ${currentTheme.accentColor} mt-0.5`}>
-                        ₹ {(totalEarnings * (analyticsFilter === 'daily' ? 1 : analyticsFilter === 'weekly' ? 7 : analyticsFilter === 'monthly' ? 30 : 365)).toFixed(2)}
+                        ₹ {currentAnalytics.revenue}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-[9px] opacity-60 uppercase font-bold">Total Orders</p>
                       <p className="text-base font-black text-emerald-500 mt-0.5">
-                        {completedOrdersCount * (analyticsFilter === 'daily' ? 1 : analyticsFilter === 'weekly' ? 7 : analyticsFilter === 'monthly' ? 30 : 365)}
+                        {currentAnalytics.count}
                       </p>
                     </div>
                   </div>
