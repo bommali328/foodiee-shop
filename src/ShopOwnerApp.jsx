@@ -57,6 +57,89 @@ export default function ShopOwnerApp() {
   });
 
 
+  // 🔍 షాప్ పిన్ కోడ్ లేదా ఏరియా పేరు బట్టి ఆటోమేటిక్‌గా Lat/Lng తెచ్చుకునే ఫంక్షన్
+  const handleSearchShopLocationByText = async (searchText) => {
+    if (!searchText || searchText.trim() === "") {
+      toast.error('❌ దయచేసి పిన్ కోడ్ లేదా షాప్ ఏరియా పేరు ఎంటర్ చేయండి');
+      return;
+    }
+
+    toast.loading('🔍 షాప్ లొకేషన్ వెతుకుతోంది...');
+
+    try {
+      let query = searchText.trim();
+      if (/^\d{6}$/.test(query)) {
+        query = `${query}, Ichapuram, India`;
+      } else {
+        query = `${query}, Ichapuram, India`;
+      }
+
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+
+      toast.dismiss();
+
+      if (data && data.length > 0) {
+        const bestMatch = data[0];
+        const newLat = parseFloat(bestMatch.lat);
+        const newLng = parseFloat(bestMatch.lon);
+        const displayName = bestMatch.display_name;
+
+        setShopProfile(prev => ({
+          ...prev,
+          location: displayName,
+          latitude: newLat,
+          longitude: newLng
+        }));
+
+        toast.success(`📍 షాప్ లొకేషన్ సెట్ అయింది: ${newLat.toFixed(4)}, ${newLng.toFixed(4)}`);
+      } else {
+        toast.error('❌ ఆ లొకేషన్ దొరకలేదు. సరిైన పిన్ కోడ్ లేదా ఏరియా పేరు ఇవ్వండి.');
+      }
+    } catch (error) {
+      toast.dismiss();
+      toast.error('❌ నెట్‌వర్క్ ఎర్రర్ ఏర్పడింది.');
+    }
+  };
+
+  // 📍 షాప్ లైవ్ GPS డిటెక్ట్ చేసే ఫంక్షన్
+  const detectShopLiveGps = () => {
+    if (!navigator.geolocation) {
+      toast.error('❌ మీ బ్రౌజర్ లొకేషన్‌ను సపోర్ట్ చేయడం లేదు');
+      return;
+    }
+
+    toast.loading('📍 షాప్ లైవ్ లొకేషన్ డిటెక్ట్ చేస్తోంది...');
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        let lat = position.coords.latitude;
+        let lng = position.coords.longitude;
+
+        // ఇచ్ఛాపురం బౌండరీ వాలిడేషన్ (సముద్రంలో పడకుండా ఉండటానికి)
+        if (lat < 18.2 || lat > 18.9 || lng < 84.2 || lng > 84.8) {
+          lat = 18.5793; 
+          lng = 84.4452; 
+          toast.error('⚠️ జీపీఎస్ లొకేషన్ సరిహద్దు దాటడంతో డిఫాల్ట్ ఇచ్ఛాపురం లొకేషన్ సెట్ చేయబడింది.');
+        }
+
+        setShopProfile(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng,
+          location: `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+        }));
+        toast.dismiss();
+        toast.success('📍 షాప్ లొకేషన్ విజయవంతంగా క్యాప్చర్ చేయబడింది!');
+      },
+      (error) => {
+        toast.dismiss();
+        toast.error('❌ లొకేషన్ పర్మిషన్ నిరాకరించబడింది.');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  };
+
   const [analyticsFilter, setAnalyticsFilter] = useState('monthly');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
@@ -67,37 +150,37 @@ export default function ShopOwnerApp() {
   const [unreadAdminChatCount, setUnreadAdminChatCount] = useState(0);
   const adminStompClientRef = useRef(null);
 
-  const getCategoryTheme = (cat, dark) => {
-    const upperCat = (cat || '').toUpperCase();
-    if (upperCat.includes('GROCERY')) {
-      return {
-        cardBg: dark 
-          ? 'bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 border-emerald-500/40 text-white' 
-          : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-white border-emerald-300 text-slate-900',
-        accentColor: dark ? 'text-emerald-400' : 'text-emerald-700',
-        badgeBg: dark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-emerald-100 text-emerald-800 border-emerald-300',
-        buttonGradient: 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black hover:opacity-90 shadow-lg shadow-emerald-500/20'
-      };
-    } else if (upperCat.includes('MEAT') || upperCat.includes('FISH') || upperCat.includes('MUTTON') || upperCat.includes('CHICKEN')) {
-      return {
-        cardBg: dark 
-          ? 'bg-gradient-to-br from-rose-950 via-slate-900 to-slate-950 border-rose-500/40 text-white' 
-          : 'bg-gradient-to-br from-rose-50 via-red-50 to-white border-rose-300 text-slate-900',
-        accentColor: dark ? 'text-rose-400' : 'text-rose-700',
-        badgeBg: dark ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' : 'bg-rose-100 text-rose-800 border-rose-300',
-        buttonGradient: 'bg-gradient-to-r from-rose-500 to-red-600 text-white font-black hover:opacity-90 shadow-lg shadow-rose-500/20'
-      };
-    } else { // FOOD
-      return {
-        cardBg: dark 
-          ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 border-amber-500/30 text-white' 
-          : 'bg-gradient-to-br from-amber-50/50 via-orange-50/30 to-white border-amber-300 text-slate-900',
-        accentColor: dark ? 'text-amber-400' : 'text-amber-700',
-        badgeBg: dark ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-amber-100 text-amber-800 border-amber-300',
-        buttonGradient: 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black hover:opacity-90 shadow-lg shadow-amber-500/20'
-      };
-    }
-  };
+ const getCategoryTheme = (cat, dark) => {
+  const upperCat = (cat || '').toUpperCase();
+  if (upperCat.includes('GROCERY')) {
+    return {
+      cardBg: dark 
+        ? 'bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 border-emerald-500/40 text-white' 
+        : 'bg-gradient-to-br from-emerald-50 via-teal-50 to-white border-emerald-300 text-slate-900',
+      accentColor: dark ? 'text-emerald-400' : 'text-emerald-700',
+      badgeBg: dark ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-emerald-100 text-emerald-800 border-emerald-300',
+      buttonGradient: 'bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black hover:opacity-90 shadow-lg shadow-emerald-500/20'
+    };
+  } else if (upperCat.includes('SWEET') || upperCat.includes('SNACK')) {
+    return {
+      cardBg: dark 
+        ? 'bg-gradient-to-br from-amber-950 via-slate-900 to-orange-950/40 border-amber-500/50 text-white' 
+        : 'bg-gradient-to-br from-amber-50 via-orange-50 to-white border-amber-300 text-slate-900',
+      accentColor: dark ? 'text-amber-400' : 'text-amber-700',
+      badgeBg: dark ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-amber-100 text-amber-800 border-amber-300',
+      buttonGradient: 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 text-slate-950 font-black hover:opacity-90 shadow-lg shadow-amber-500/30'
+    };
+  } else { // FOOD
+    return {
+      cardBg: dark 
+        ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/30 border-amber-500/30 text-white' 
+        : 'bg-gradient-to-br from-amber-50/50 via-orange-50/30 to-white border-amber-300 text-slate-900',
+      accentColor: dark ? 'text-amber-400' : 'text-amber-700',
+      badgeBg: dark ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-amber-100 text-amber-800 border-amber-300',
+      buttonGradient: 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black hover:opacity-90 shadow-lg shadow-amber-500/20'
+    };
+  }
+};
 
   const regTheme = getCategoryTheme(category, isDarkMode);
   const currentTheme = getCategoryTheme(shopProfile.category, isDarkMode);
@@ -732,28 +815,46 @@ const toggleStoreStatus = async () => {
   const [newItemName, setNewItemName] = useState('');
   const [newItemPrice, setNewItemPrice] = useState('');
   
-  const getSubCategoriesForShop = (cat) => {
-    const upperCat = (cat || '').toUpperCase();
-    if (upperCat.includes('GROCERY')) {
-      return [
-        'Daily Products & Milk', 'Pappulu & Dals', 'Nunelu & Oils', 'Pindi & Flours',
-        'Rice & Grains', 'Spices & Masalas', 'Sugar & Salt', 'Dry Fruits',
-        'Snacks & Biscuits', 'Beverages & Tea', 'Cleaning & Soaps', 'Personal Care',
-        'Instant Foods', 'Kitchen Essentials', 'Pooja Needs', 'Vegetables & Fruits',
-        'Cereals & Oats', 'Jams & Honey', 'Sauces & Ketchup', 'Baby Care'
-      ];
-    } else if (upperCat.includes('MEAT') || upperCat.includes('FISH') || upperCat.includes('MUTTON') || upperCat.includes('CHICKEN')) {
-      return ['Fish', 'Mutton', 'Chicken', 'Eggs', 'Prawns & Seafood', 'Country Chicken / Naati Kodi'];
-    } else {
-      return [
-        'Tiffins & Breakfast', 'Meals & Thali', 'Veg Starters', 'Non-Veg Starters',
-        'Biryani & Rice', 'Fast Food & Noodles', 'Juices & Beverages', 'Desserts & Sweets',
-        'South Indian Specials', 'North Indian Curries', 'Breads & Rotis', 'Soup & Salads',
-        'Pizzas & Burgers', 'Chats & Street Food', 'Ice Creams & Shakes', 'Evening Snacks',
-        'Combo Meals', 'Special Thalis', 'Dosa Varieties', 'Fried Rice Specials'
-      ];
-    }
-  };
+ const getSubCategoriesForShop = (cat) => {
+  const upperCat = (cat || '').toUpperCase();
+  
+  if (upperCat.includes('GROCERY')) {
+    return [
+      'Daily Products & Milk', 'Pappulu & Dals', 'Nunelu & Oils', 'Pindi & Flours',
+      'Rice & Grains', 'Spices & Masalas', 'Sugar & Salt', 'Dry Fruits',
+      'Snacks & Biscuits', 'Beverages & Tea', 'Cleaning & Soaps', 'Personal Care',
+      'Instant Foods', 'Kitchen Essentials', 'Pooja Needs', 'Vegetables & Fruits',
+      'Cereals & Oats', 'Jams & Honey', 'Sauces & Ketchup', 'Baby Care'
+    ];
+  } else if (upperCat.includes('SWEET') || upperCat.includes('SNACK')) {
+    return [
+      'All Sweets & Snacks',
+      'Sweets (సాధారణ స్వీట్లు)',
+      'Special Andhra Sweets (పూతరేకులు & ఖాజా)',
+      'Dry Fruit Sweets (డ్రై ఫ్రూట్ స్వీట్లు)',
+      'Ghee Sweets (నెయ్యి స్వీట్లు)',
+      'Milk Products (పాల ఉత్పత్తులు - కోవా/పెరుగు)',
+      'Biscuits & Chocolates (బిస్కెట్లు & చాక్లెట్లు)',
+      'Ice Creams & Desserts (ఐస్ క్రీమ్స్ & డెజర్ట్స్)',
+      'Traditional Snacks (మురుకులు & చెగోడీలు)',
+      'Hot & Spicy Mixtures (మిక్చర్ & కారప్పూస)'
+    ];
+  } else {
+    // 👇 Restaurant Items, Sweets & Snacks అన్నీ కలిపి డిఫాల్ట్ లిస్ట్
+    return [
+      'Sweets & Special Sweets (స్వీట్లు)',
+      'Milk Products (పాల ఉత్పత్తులు)',
+      'Biscuits & Chocolates (బిస్కెట్లు & చాక్లెట్లు)',
+      'Ice Creams & Shakes (ఐస్ క్రీమ్స్)',
+      'Traditional Snacks & Mixtures (స్నాక్స్)',
+      'Tiffins & Breakfast (టిఫిన్స్)',
+      'Meals & Thali (మీల్స్)',
+      'Biryani & Rice Specials (బిర్యానీ)',
+      'Starters & Fast Food (స్టార్టర్స్ & ఫాస్ట్ ఫుడ్)',
+      'Juices & Beverages (జ్యూసెస్)'
+    ];
+  }
+};
 
   const currentSubCategories = getSubCategoriesForShop(shopProfile.category);
 
@@ -1072,8 +1173,8 @@ const toggleStoreStatus = async () => {
                         activeGradient: 'bg-gradient-to-br from-emerald-400 to-teal-600 text-slate-950 border-emerald-300 shadow-emerald-500/40'
                       },
                       { 
-                        type: 'MEAT & FISH', 
-                        label: '🥩 Meat & Fish', 
+                        type: 'Sweets & Snacks', 
+                        label: '🥩 Sweets & Snacks', 
                         gradient: 'from-rose-500/20 via-red-500/20 to-pink-500/20 border-rose-500/50',
                         activeGradient: 'bg-gradient-to-br from-rose-500 to-red-600 text-white border-rose-300 shadow-rose-500/40'
                       }
@@ -1840,7 +1941,7 @@ const toggleStoreStatus = async () => {
               </div>
 
               {isEditingProfile ? (
-                <form onSubmit={updateProfileDetails} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 text-gray-900'} p-4 rounded-2xl border space-y-2 shadow-sm`}>
+                <form onSubmit={updateProfileDetails} className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-200 text-gray-900'} p-4 rounded-2xl border space-y-2 shadow-sm text-xs`}>
                   <label className="text-[10px] opacity-70 font-bold">Shop Name</label>
                   <input type="text" value={shopProfile.shopName} onChange={(e) => setShopProfile({...shopProfile, shopName: e.target.value})} className={`w-full ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-gray-200 text-gray-900'} border p-2 rounded-xl font-bold outline-none`} required />
                   
@@ -1859,6 +1960,36 @@ const toggleStoreStatus = async () => {
 
                   <label className="text-[10px] opacity-70 font-bold">Address / Location</label>
                   <input type="text" value={shopProfile.location} onChange={(e) => setShopProfile({...shopProfile, location: e.target.value})} className={`w-full ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-gray-200 text-gray-900'} border p-2 rounded-xl font-bold outline-none`} required />
+
+                  {/* 👇 పిన్ కోడ్ లేదా ఏరియా నేమ్ ద్వారా షాప్ లొకేషన్ సెర్చ్ చేసే బాక్స్ మరియు GPS బటన్ */}
+                  <div className="space-y-1.5 bg-slate-950 p-2.5 rounded-xl border border-slate-800 my-2">
+                    <label className="text-[9px] text-amber-400 font-bold uppercase">Search Location by Pincode or Area</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        id="shopSearchAreaInput"
+                        placeholder="ఉదా: 532312 లేదా Main Road" 
+                        className="flex-1 bg-slate-900 border border-slate-700 p-2 rounded-lg text-xs font-bold text-white outline-none"
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          const val = document.getElementById('shopSearchAreaInput').value;
+                          handleSearchShopLocationByText(val);
+                        }}
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-2 rounded-lg text-xs font-black cursor-pointer shadow"
+                      >
+                        Search 🔍
+                      </button>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={detectShopLiveGps}
+                      className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg text-[10px] font-black flex items-center justify-center gap-1 shadow cursor-pointer mt-1"
+                    >
+                      <Navigation size={12} /> Detect Shop Live GPS 📌
+                    </button>
+                  </div>
 
                   <label className="text-[10px] opacity-70 font-bold">FSSAI License</label>
                   <input type="text" value={shopProfile.fssaiLicense} onChange={(e) => setShopProfile({...shopProfile, fssaiLicense: e.target.value})} className={`w-full ${isDarkMode ? 'bg-slate-950 border-slate-800 text-white' : 'bg-white border-gray-200 text-gray-900'} border p-2 rounded-xl font-bold outline-none`} required />
