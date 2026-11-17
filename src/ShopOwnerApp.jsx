@@ -1174,7 +1174,7 @@ const toggleStoreStatus = async () => {
                       },
                       { 
                         type: 'Sweets & Snacks', 
-                        label: '🥩 Sweets & Snacks', 
+                        label: '🍬 Sweets & Snacks', 
                         gradient: 'from-rose-500/20 via-red-500/20 to-pink-500/20 border-rose-500/50',
                         activeGradient: 'bg-gradient-to-br from-rose-500 to-red-600 text-white border-rose-300 shadow-rose-500/40'
                       }
