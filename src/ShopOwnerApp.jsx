@@ -829,29 +829,38 @@ const toggleStoreStatus = async () => {
   } else if (upperCat.includes('SWEET') || upperCat.includes('SNACK')) {
     return [
       'All Sweets & Snacks',
-      'Sweets (సాధారణ స్వీట్లు)',
-      'Special Andhra Sweets (పూతరేకులు & ఖాజా)',
-      'Dry Fruit Sweets (డ్రై ఫ్రూట్ స్వీట్లు)',
-      'Ghee Sweets (నెయ్యి స్వీట్లు)',
-      'Milk Products (పాల ఉత్పత్తులు - కోవా/పెరుగు)',
-      'Biscuits & Chocolates (బిస్కెట్లు & చాక్లెట్లు)',
-      'Ice Creams & Desserts (ఐస్ క్రీమ్స్ & డెజర్ట్స్)',
-      'Traditional Snacks (మురుకులు & చెగోడీలు)',
-      'Hot & Spicy Mixtures (మిక్చర్ & కారప్పూస)'
+      'Sweets & Special Sweets',
+      'Special Andhra Sweets (Pootharekulu & Kaja)',
+      'Dry Fruit Sweets',
+      'Ghee Sweets',
+      'Milk Products & Peda',
+      'Biscuits & Chocolates',
+      'Ice Creams & Desserts',
+      'Traditional Snacks & Murukku',
+      'Hot & Spicy Mixtures'
     ];
   } else {
-    // 👇 Restaurant Items, Sweets & Snacks అన్నీ కలిపి డిఫాల్ట్ లిస్ట్
+    // 👇 అన్ని ఫుడ్ ఐటెమ్స్ విడివిడిగా (Separate Categories) ఉండే పర్ఫెక్ట్ లిస్ట్
     return [
-      'Sweets & Special Sweets (స్వీట్లు)',
-      'Milk Products (పాల ఉత్పత్తులు)',
-      'Biscuits & Chocolates (బిస్కెట్లు & చాక్లెట్లు)',
-      'Ice Creams & Shakes (ఐస్ క్రీమ్స్)',
-      'Traditional Snacks & Mixtures (స్నాక్స్)',
-      'Tiffins & Breakfast (టిఫిన్స్)',
-      'Meals & Thali (మీల్స్)',
-      'Biryani & Rice Specials (బిర్యానీ)',
-      'Starters & Fast Food (స్టార్టర్స్ & ఫాస్ట్ ఫుడ్)',
-      'Juices & Beverages (జ్యూసెస్)'
+      'All Categories',
+      'Sweets & Special Sweets',
+      'Special Andhra Sweets (Pootharekulu & Kaja)',
+      'Dry Fruit & Ghee Sweets',
+      'Milk Products & Peda',
+      'Traditional Snacks & Mixtures',
+      'Hot & Spicy Savories',
+      'Veg Tiffins & Breakfast',
+      'Veg Meals & Thali',
+      'Chicken Non-Veg Specials',
+      'Mutton Non-Veg Specials',
+      'Fish & Prawns Seafood',
+      'Biryanis & Pulao Specials',
+      'Fried Rice & Noodles',
+      'Chinese Starters & Gravies',
+      'Fast Food & Street Snacks',
+      'Tandoori & Grills',
+      'Ice Creams & Shakes',
+      'Juices & Beverages'
     ];
   }
 };
